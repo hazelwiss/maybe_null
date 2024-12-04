@@ -2,3 +2,9 @@
 name = "maybe_null"
 version = "0.1.0"
 edition = "2024"
+license-file = "LICENSE"
+readme = "README.md"
+repository = "https://github.com/hazelwiss/maybe_null"
+keywords = ["no-std", "minimal", "pointers", "wrapper", "convenience"]
+categories = ["no-std", "no-std::no-alloc", "rust-patterns"]
+description = "A pointer type for handling potentially null values without accidental dereference"
