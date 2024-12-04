@@ -2,6 +2,7 @@
 
 use core::{
     fmt::{Debug, Pointer},
+    hash::Hash,
     ptr::{self, NonNull},
     sync::atomic::{AtomicPtr, Ordering},
 };
@@ -10,10 +11,48 @@ use core::{
 /// that is checked for null before accessed.
 ///
 /// MaybeNull is marked as `repr(transparent)`.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 pub struct MaybeNull<T: ?Sized> {
     ptr: *mut T,
+}
+
+impl<T> Clone for MaybeNull<T> {
+    #[inline]
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T> Copy for MaybeNull<T> {}
+
+impl<T> PartialEq for MaybeNull<T> {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        PartialEq::eq(&self.ptr, &other.ptr)
+    }
+}
+
+impl<T> Eq for MaybeNull<T> {}
+
+impl<T> PartialOrd for MaybeNull<T> {
+    #[inline]
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<T> Ord for MaybeNull<T> {
+    #[inline]
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        Ord::cmp(&self.ptr, &other.ptr)
+    }
+}
+
+impl<T> Hash for MaybeNull<T> {
+    #[inline]
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        Hash::hash(&self.ptr, state)
+    }
 }
 
 impl<T> Debug for MaybeNull<T> {
