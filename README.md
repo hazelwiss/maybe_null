@@ -1,6 +1,6 @@
 # MaybeNull
 
-The [`MaybeNull`] type is used for hinting that a pointer may be null, and still prevent accidental null pointer dereference.
+The `MaybeNull` type is used for hinting that a pointer may be null, and still prevent accidental null pointer dereference.
 
 ```rs
 use maybe_null::MaybeNull;
@@ -17,5 +17,5 @@ let Some(ptr) = ptr.get() {
 
 # AtomicMaybeNull
 
-The [`AtomicMaybeNull`] works like [`MaybeNull`] but allows for atomic access of the pointer.
+The `AtomicMaybeNull` works like `MaybeNull` but allows for atomic access of the pointer.
 
