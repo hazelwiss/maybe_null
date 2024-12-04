@@ -13,7 +13,7 @@ use core::{
 /// MaybeNull is marked as `repr(transparent)`.
 #[repr(transparent)]
 pub struct MaybeNull<T: ?Sized> {
-    ptr: *mut T,
+    ptr: Option<NonNull<T>>,
 }
 
 impl<T> Clone for MaybeNull<T> {
@@ -65,14 +65,29 @@ impl<T> Debug for MaybeNull<T> {
 impl<T> Pointer for MaybeNull<T> {
     #[inline]
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        Pointer::fmt(&self.ptr, f)
+        Pointer::fmt(&self.ptr.map_or(ptr::null_mut(), |ptr| ptr.as_ptr()), f)
     }
 }
 
 impl<T> MaybeNull<T> {
     #[inline]
-    pub fn new(ptr: *mut T) -> Self {
+    const fn wrap(ptr: Option<NonNull<T>>) -> Self {
         Self { ptr }
+    }
+
+    #[inline]
+    fn map<U>(self, f: impl FnOnce(*mut T) -> *mut U) -> MaybeNull<U> {
+        MaybeNull::new(f(self.ptr.map_or(ptr::null_mut(), |ptr| ptr.as_ptr())))
+    }
+
+    #[inline]
+    pub fn new(ptr: *mut T) -> Self {
+        Self::wrap(NonNull::new(ptr))
+    }
+
+    #[inline]
+    pub const fn from_non_null(ptr: NonNull<T>) -> Self {
+        Self::wrap(Some(ptr))
     }
 
     /// Look at [`core::ptr::with_exposed_provenance`] for more information.
@@ -101,14 +116,14 @@ impl<T> MaybeNull<T> {
 
     /// Returns `true` if the pointer was null, otherwise returns `false`.
     #[inline]
-    pub fn is_null(self) -> bool {
+    pub const fn is_null(self) -> bool {
         self.get().is_none()
     }
 
     /// Sets the pointer to a non-null value.
     #[inline]
-    pub fn set(&mut self, value: NonNull<T>) {
-        self.ptr = value.as_ptr()
+    pub const fn set(&mut self, value: NonNull<T>) {
+        self.ptr = Some(value)
     }
 
     /// Sets the pointer to null.
@@ -119,105 +134,105 @@ impl<T> MaybeNull<T> {
 
     /// Returns `Some` if the pointer is non-null, otherwise return `None`.
     #[inline]
-    pub fn get(self) -> Option<NonNull<T>> {
-        NonNull::new(self.ptr)
+    pub const fn get(self) -> Option<NonNull<T>> {
+        self.ptr
     }
 
     #[inline]
     pub fn get_unchecked(self) -> *mut T {
-        self.ptr
+        self.ptr.map_or(ptr::null_mut(), |ptr| ptr.as_ptr())
     }
 
     /// Look at [`ptr::cast`] for more information.
     #[inline]
     pub fn cast<U>(self) -> MaybeNull<U> {
-        MaybeNull::new(self.ptr.cast::<U>())
+        self.map(|ptr| ptr.cast::<U>())
     }
 
     /// Look at [`ptr::addr`] for more information.
     #[inline]
     pub fn addr(self) -> usize {
-        self.ptr.addr()
+        self.ptr.map_or(0, |ptr| ptr.addr().get())
     }
 
     /// Look at [`ptr::as_ref`] for more information.
     #[allow(clippy::missing_safety_doc)]
     #[inline]
     pub unsafe fn as_ref<'a>(self) -> Option<&'a T> {
-        unsafe { self.ptr.as_ref() }
+        unsafe { self.ptr.map(|ptr| ptr.as_ref()) }
     }
 
     /// Look at [`ptr::as_mut`] for more information.
     #[allow(clippy::missing_safety_doc)]
     #[inline]
     pub unsafe fn as_mut<'a>(self) -> Option<&'a mut T> {
-        unsafe { self.ptr.as_mut() }
+        unsafe { self.ptr.map(|mut ptr| ptr.as_mut()) }
     }
 
     /// Look at [`ptr::offset`] for more information.
     #[allow(clippy::missing_safety_doc)]
     #[inline]
     pub unsafe fn offset(self, count: isize) -> Self {
-        unsafe { Self::new(self.ptr.offset(count)) }
+        unsafe { self.map(|ptr| ptr.offset(count)) }
     }
 
     /// Look at [`ptr::byte_offset`] for more information.
     #[allow(clippy::missing_safety_doc)]
     #[inline]
     pub unsafe fn byte_offset(self, count: isize) -> Self {
-        unsafe { Self::new(self.ptr.byte_offset(count)) }
+        unsafe { self.map(|ptr| ptr.byte_offset(count)) }
     }
 
     /// Look at [`ptr::add`] for more information.
     #[allow(clippy::missing_safety_doc)]
     #[inline]
     pub unsafe fn add(self, count: usize) -> Self {
-        unsafe { Self::new(self.ptr.add(count)) }
+        unsafe { self.map(|ptr| ptr.add(count)) }
     }
 
     /// Look at [`ptr::byte_add`] for more information.
     #[allow(clippy::missing_safety_doc)]
     #[inline]
     pub unsafe fn byte_add(self, count: usize) -> Self {
-        unsafe { Self::new(self.ptr.byte_add(count)) }
+        unsafe { self.map(|ptr| ptr.byte_add(count)) }
     }
 
     /// Look at [`ptr::sub`] for more information.
     #[allow(clippy::missing_safety_doc)]
     #[inline]
     pub unsafe fn sub(self, count: usize) -> Self {
-        unsafe { Self::new(self.ptr.sub(count)) }
+        unsafe { self.map(|ptr| ptr.sub(count)) }
     }
 
     /// Look at [`ptr::byte_sub`] for more information.
     #[allow(clippy::missing_safety_doc)]
     #[inline]
     pub unsafe fn byte_sub(self, count: usize) -> Self {
-        unsafe { Self::new(self.ptr.byte_sub(count)) }
+        unsafe { self.map(|ptr| ptr.byte_sub(count)) }
     }
 
     /// Look at [`ptr::wrapping_add`] for more information.
     #[inline]
     pub fn wrapping_add(self, count: usize) -> Self {
-        Self::new(self.ptr.wrapping_add(count))
+        self.map(|ptr| ptr.wrapping_add(count))
     }
 
     /// Look at [`ptr::wrapping_byte_add`] for more information.
     #[inline]
     pub fn wrapping_byte_add(self, count: usize) -> Self {
-        Self::new(self.ptr.wrapping_byte_add(count))
+        self.map(|ptr| ptr.wrapping_byte_add(count))
     }
 
     /// Look at [`ptr::wrapping_sub`] for more information.
     #[inline]
     pub fn wrapping_sub(self, count: usize) -> Self {
-        Self::new(self.ptr.wrapping_sub(count))
+        self.map(|ptr| ptr.wrapping_sub(count))
     }
 
     /// Look at [`ptr::wrapping_byte_sub`] for more information.
     #[inline]
     pub fn wrapping_byte_sub(self, count: usize) -> Self {
-        Self::new(self.ptr.wrapping_byte_sub(count))
+        self.map(|ptr| ptr.wrapping_byte_sub(count))
     }
 }
 
@@ -246,9 +261,16 @@ impl<T> Pointer for AtomicMaybeNull<T> {
 
 impl<T> AtomicMaybeNull<T> {
     #[inline]
-    pub fn new(ptr: *mut T) -> Self {
+    pub const fn new(ptr: *mut T) -> Self {
         Self {
             ptr: AtomicPtr::new(ptr),
+        }
+    }
+
+    #[inline]
+    pub const fn from_non_null(ptr: NonNull<T>) -> Self {
+        Self {
+            ptr: AtomicPtr::new(ptr.as_ptr()),
         }
     }
 
@@ -260,19 +282,19 @@ impl<T> AtomicMaybeNull<T> {
 
     /// Look at [`core::ptr::without_provenance`] for more information.
     #[inline]
-    pub fn without_provenance(addr: usize) -> Self {
+    pub const fn without_provenance(addr: usize) -> Self {
         Self::new(ptr::without_provenance_mut(addr))
     }
 
     /// Look at [`core::ptr::null`] for more information.
     #[inline]
-    pub fn null() -> Self {
+    pub const fn null() -> Self {
         Self::new(ptr::null_mut())
     }
 
     /// Look at [`core::ptr::dangling`] for more information.
     #[inline]
-    pub fn dangling() -> Self {
+    pub const fn dangling() -> Self {
         Self::new(ptr::dangling_mut())
     }
 
